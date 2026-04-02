@@ -1,0 +1,6 @@
+.data/tasks.json
+.data/settings.json
+__pycache__/
+*.pyc
+dist/
+build/
