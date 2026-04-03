@@ -11,6 +11,7 @@ from .paths import settings_file
 DEFAULT_SETTINGS = {
     "always_on_top": False,
     "start_with_windows": False,
+    "collapsed_completed_dates": {},
 }
 
 
@@ -30,10 +31,15 @@ class SettingsStore:
 
         result = DEFAULT_SETTINGS.copy()
         if isinstance(data, dict):
+            collapsed = data.get("collapsed_completed_dates", {})
+            collapsed_map = {
+                str(k): bool(v) for k, v in collapsed.items()
+            } if isinstance(collapsed, dict) else {}
             result.update(
                 {
                     "always_on_top": bool(data.get("always_on_top", False)),
                     "start_with_windows": bool(data.get("start_with_windows", False)),
+                    "collapsed_completed_dates": collapsed_map,
                 }
             )
         return result
@@ -42,6 +48,10 @@ class SettingsStore:
         data = {
             "always_on_top": bool(settings.get("always_on_top", False)),
             "start_with_windows": bool(settings.get("start_with_windows", False)),
+            "collapsed_completed_dates": {
+                str(k): bool(v)
+                for k, v in settings.get("collapsed_completed_dates", {}).items()
+            },
         }
         self._atomic_write_json(self.file_path, data)
 

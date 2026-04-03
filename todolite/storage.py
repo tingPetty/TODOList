@@ -17,15 +17,19 @@ class Task:
     text: str
     completed: bool
     created_at: str
+    task_date: str
+    important: bool
     order: int
 
     @staticmethod
-    def create(text: str, order: int) -> "Task":
+    def create(text: str, order: int, task_date: str, important: bool = False) -> "Task":
         return Task(
             id=uuid.uuid4().hex,
             text=text,
             completed=False,
             created_at=datetime.now().isoformat(timespec="seconds"),
+            task_date=task_date,
+            important=important,
             order=order,
         )
 
@@ -55,6 +59,8 @@ class TaskStore:
                     text=text,
                     completed=bool(item.get("completed", False)),
                     created_at=str(item.get("created_at") or datetime.now().isoformat(timespec="seconds")),
+                    task_date=str(item.get("task_date") or str(item.get("created_at") or datetime.now().isoformat(timespec="seconds"))[:10]),
+                    important=bool(item.get("important", False)),
                     order=int(item.get("order", i)),
                 )
             )
