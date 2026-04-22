@@ -12,9 +12,12 @@ A lightweight Windows desktop todo widget built with PySide6.
 - Delete task manually
 - Double-click task text to edit text/date/important in one dialog
 - Drag to reorder active tasks
+- Drag active tasks across date groups and auto-sync task date
 - Completed tasks sink to bottom automatically
 - Group tasks by date
 - Collapse completed tasks per date group
+- Auto-clean completed tasks from 2+ days ago (Beijing time, by task date)
+- Task statistics panel (30-day completion curve + per-day completed list)
 - Local JSON persistence
 - Per-date collapse state persistence across app restarts
 - Startup toggle (Windows)
@@ -49,3 +52,4 @@ pyinstaller --name DesktopTodoLite --windowed --onefile main.py
 - Data file and settings are stored in `./.data/` under project root.
 - Startup uses `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`.
 - Project launch script uses conda env `todo_desk` via `start_todo.bat`.
+- Auto-clean rule: on app startup, completed tasks with `task_date <= (today in UTC+8 - 2 days)` are removed.

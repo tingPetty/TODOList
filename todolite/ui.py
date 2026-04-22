@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import replace
+from datetime import date, datetime, timedelta, timezone
+
+import pyqtgraph as pg
 
 from PySide6.QtCore import QDate, QPoint, Qt, Signal
 from PySide6.QtGui import QAction
@@ -283,6 +286,237 @@ class TaskEditDialog(QDialog):
         )
 
 
+class TaskStatsDialog(QDialog):
+    def __init__(self, parent: QWidget, tasks: list[Task]) -> None:
+        super().__init__(parent)
+        self.tasks = tasks
+        self._drag_offset: QPoint | None = None
+        self._dragging = False
+        self.setModal(True)
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.resize(540, 460)
+        self.setObjectName("StatsDialog")
+        self.setStyleSheet(
+            "QDialog#StatsDialog {"
+            "  background: transparent;"
+            "}"
+            "QFrame#StatsSurface {"
+            "  background: qlineargradient(x1:0, y1:0, x2:1, y2:1,"
+            "    stop:0 rgba(79, 101, 128, 232),"
+            "    stop:0.55 rgba(68, 89, 117, 235),"
+            "    stop:1 rgba(63, 84, 108, 238));"
+            "  border: none;"
+            "  border-radius: 18px;"
+            "}"
+            "QLabel { color: #e8eef7; font-size: 13px; }"
+            "QLabel#StatsTitle { color: #f8fbff; font-size: 28px; font-weight: 800; letter-spacing: 1px; }"
+            "QLabel#StatsSubtitle { color: rgba(235, 245, 255, 185); font-size: 12px; }"
+            "QLabel#DaySummary { color: #f8fbff; font-size: 14px; font-weight: 700; }"
+            "QFrame#StatsCard {"
+            "  background: rgba(23, 36, 54, 110);"
+            "  border: 1px solid rgba(255,255,255,32);"
+            "  border-radius: 14px;"
+            "}"
+            "QListWidget {"
+            "  background: rgba(22, 34, 52, 120);"
+            "  color: #ebf2fd;"
+            "  border: 1px solid rgba(255,255,255,28);"
+            "  border-radius: 12px;"
+            "  padding: 6px;"
+            "}"
+            "QDateEdit {"
+            "  background: rgba(255,255,255,22);"
+            "  color: #eef5ff;"
+            "  border: 1px solid rgba(255,255,255,60);"
+            "  border-radius: 10px;"
+            "  padding: 5px 8px;"
+            "  font-size: 13px;"
+            "}"
+            "QPushButton#StatsTopCloseBtn {"
+            "  background: rgba(239, 68, 68, 230);"
+            "  color: #fff1f2;"
+            "  border: 1px solid rgba(255,255,255,75);"
+            "  border-radius: 9px;"
+            "  min-width: 26px;"
+            "  max-width: 26px;"
+            "  min-height: 26px;"
+            "  max-height: 26px;"
+            "  font-size: 14px;"
+            "  font-weight: 700;"
+            "}"
+            "QPushButton#StatsTopCloseBtn:hover { background: rgba(220, 38, 38, 240); }"
+        )
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        surface = QFrame()
+        surface.setObjectName("StatsSurface")
+        root.addWidget(surface)
+
+        body = QVBoxLayout(surface)
+        body.setContentsMargins(14, 14, 14, 14)
+        body.setSpacing(12)
+
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(8)
+
+        top_row.addStretch(1)
+        top_close_btn = QPushButton("X")
+        top_close_btn.setObjectName("StatsTopCloseBtn")
+        top_close_btn.clicked.connect(self.accept)
+        top_row.addWidget(top_close_btn, 0, Qt.AlignRight)
+        body.addLayout(top_row)
+
+        title = QLabel("任务统计")
+        title.setObjectName("StatsTitle")
+        body.addWidget(title)
+
+        subtitle = QLabel("最近30天完成任务曲线")
+        subtitle.setObjectName("StatsSubtitle")
+        body.addWidget(subtitle)
+
+        chart_card = QFrame()
+        chart_card.setObjectName("StatsCard")
+        chart_layout = QVBoxLayout(chart_card)
+        chart_layout.setContentsMargins(10, 10, 10, 10)
+        chart_layout.setSpacing(8)
+
+        chart_caption = QLabel("完成趋势")
+        chart_caption.setStyleSheet("color: rgba(242, 248, 255, 220); font-size: 13px; font-weight: 700;")
+        chart_layout.addWidget(chart_caption)
+
+        self.plot = pg.PlotWidget()
+        self.plot.setBackground((0, 0, 0, 0))
+        self.plot.showGrid(x=True, y=True, alpha=0.14)
+        self.plot.getAxis("left").setTextPen("#d7e5f7")
+        self.plot.getAxis("bottom").setTextPen("#d7e5f7")
+        self.plot.getAxis("left").setPen("#8ca4c2")
+        self.plot.getAxis("bottom").setPen("#8ca4c2")
+        chart_layout.addWidget(self.plot, 1)
+
+        body.addWidget(chart_card, 1)
+
+        query_row = QHBoxLayout()
+        query_row.setSpacing(8)
+        query_row.addWidget(QLabel("查询日期"))
+
+        self.date_query = QDateEdit()
+        self.date_query.setCalendarPopup(True)
+        self.date_query.setDisplayFormat("yyyy-MM-dd")
+        self.date_query.setDate(QDate.currentDate())
+        self.date_query.dateChanged.connect(self._refresh_day_details)
+        query_row.addWidget(self.date_query)
+        query_row.addStretch(1)
+        body.addLayout(query_row)
+
+        self.day_summary = QLabel("")
+        self.day_summary.setObjectName("DaySummary")
+        body.addWidget(self.day_summary)
+
+        detail_card = QFrame()
+        detail_card.setObjectName("StatsCard")
+        detail_layout = QVBoxLayout(detail_card)
+        detail_layout.setContentsMargins(8, 8, 8, 8)
+        detail_layout.setSpacing(6)
+
+        detail_title = QLabel("当日完成明细")
+        detail_title.setStyleSheet("color: rgba(242, 248, 255, 220); font-size: 13px; font-weight: 700;")
+        detail_layout.addWidget(detail_title)
+
+        self.detail_list = QListWidget()
+        detail_layout.addWidget(self.detail_list, 1)
+        body.addWidget(detail_card, 1)
+
+        self._render_curve()
+        self._refresh_day_details()
+
+    def _is_top_drag_zone(self, local_pos: QPoint) -> bool:
+        if local_pos.y() > 48:
+            return False
+        if local_pos.x() > self.width() - 56:
+            return False
+        return True
+
+    def mousePressEvent(self, event):  # noqa: N802
+        if event.button() == Qt.LeftButton and self._is_top_drag_zone(event.pos()):
+            self._dragging = True
+            self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):  # noqa: N802
+        if self._dragging and self._drag_offset is not None and event.buttons() & Qt.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):  # noqa: N802
+        self._dragging = False
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
+
+    def _render_curve(self) -> None:
+        today = beijing_today_date()
+        start = today - timedelta(days=29)
+        date_keys = [(start + timedelta(days=i)).isoformat() for i in range(30)]
+
+        completed_count: dict[str, int] = defaultdict(int)
+        for task in self.tasks:
+            if task.completed:
+                completed_count[task.task_date] += 1
+
+        x_vals = list(range(30))
+        y_vals = [completed_count.get(k, 0) for k in date_keys]
+
+        self.plot.clear()
+        curve_pen = pg.mkPen(color="#ffd480", width=3)
+        fill_brush = pg.mkBrush(255, 212, 128, 55)
+        dot_brush = pg.mkBrush("#ff9aa2")
+        self.plot.plot(
+            x_vals,
+            y_vals,
+            pen=curve_pen,
+            symbol="o",
+            symbolSize=7,
+            symbolBrush=dot_brush,
+            symbolPen=pg.mkPen("#fff1f2", width=1),
+            fillLevel=0,
+            brush=fill_brush,
+        )
+
+        # Keep axis labels readable by showing every 5 days.
+        ticks = [(i, date_keys[i][5:]) for i in range(0, 30, 5)]
+        self.plot.getAxis("bottom").setTicks([ticks])
+        self.plot.setYRange(0, max(1, max(y_vals) + 1), padding=0.05)
+
+    def _refresh_day_details(self) -> None:
+        key = self.date_query.date().toString("yyyy-MM-dd")
+        done = [t for t in self.tasks if t.completed and t.task_date == key]
+
+        self.day_summary.setText(f"{key} 已完成 {len(done)} 项")
+        self.detail_list.clear()
+        if not done:
+            self.detail_list.addItem("今天先休息一下，明天继续加油")
+            return
+
+        for task in sorted(done, key=lambda t: (t.order, t.created_at, t.id)):
+            prefix = "❗ " if task.important else ""
+            self.detail_list.addItem(f"{prefix}{task.text}")
+
+
+BJ_TZ = timezone(timedelta(hours=8))
+
+
+def beijing_today_date() -> date:
+    return datetime.now(BJ_TZ).date()
+
+
 class TodoWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
@@ -303,6 +537,7 @@ class TodoWindow(QWidget):
 
         self._build_ui()
         self._load_state()
+        self._cleanup_completed_before_or_on(self._cleanup_cutoff_date_key())
         self._render_tasks()
 
     def _build_ui(self) -> None:
@@ -329,7 +564,13 @@ class TodoWindow(QWidget):
         menu_btn.setPopupMode(QToolButton.InstantPopup)
         menu_btn.setMenu(self._build_menu())
 
+        stats_btn = QToolButton()
+        stats_btn.setObjectName("MenuBtn")
+        stats_btn.setText("统计")
+        stats_btn.clicked.connect(self._show_task_stats)
+
         header.addWidget(title, 1)
+        header.addWidget(stats_btn)
         header.addWidget(menu_btn)
 
         self.input_box = QLineEdit()
@@ -379,14 +620,34 @@ class TodoWindow(QWidget):
         self.action_autostart = QAction("开机自启", self, checkable=True)
         self.action_autostart.toggled.connect(self._toggle_autostart)
 
+        stats_action = QAction("任务统计", self)
+        stats_action.triggered.connect(self._show_task_stats)
+
         close_action = QAction("退出", self)
         close_action.triggered.connect(self.close)
 
         menu.addAction(self.action_on_top)
         menu.addAction(self.action_autostart)
+        menu.addAction(stats_action)
         menu.addSeparator()
         menu.addAction(close_action)
         return menu
+
+    def _cleanup_cutoff_date_key(self) -> str:
+        return (beijing_today_date() - timedelta(days=2)).isoformat()
+
+    def _cleanup_completed_before_or_on(self, cutoff_date_key: str) -> None:
+        kept = [
+            task
+            for task in self.tasks
+            if not (task.completed and task.task_date <= cutoff_date_key)
+        ]
+        if len(kept) == len(self.tasks):
+            return
+
+        self.tasks = kept
+        self._reindex_active_order()
+        self.task_store.save(self.tasks)
 
     def _load_state(self) -> None:
         self.action_on_top.setChecked(self.settings.get("always_on_top", False))
@@ -435,6 +696,7 @@ class TodoWindow(QWidget):
 
             header_item = QListWidgetItem(self.task_list)
             header_item.setData(ITEM_TYPE_ROLE, "header")
+            header_item.setData(TASK_DATE_ROLE, date_key)
             header_item.setFlags(Qt.ItemIsEnabled)
             header = GroupHeaderRow(
                 self._date_label(date_key),
@@ -556,9 +818,16 @@ class TodoWindow(QWidget):
     def _on_tasks_reordered(self) -> None:
         counters: dict[str, int] = defaultdict(int)
         new_orders: dict[str, int] = {}
+        new_dates: dict[str, str] = {}
+        current_group_date: str | None = None
 
         for idx in range(self.task_list.count()):
             item = self.task_list.item(idx)
+            if item.data(ITEM_TYPE_ROLE) == "header":
+                header_date = item.data(TASK_DATE_ROLE)
+                current_group_date = str(header_date) if header_date else None
+                continue
+
             if item.data(ITEM_TYPE_ROLE) != "task":
                 continue
 
@@ -566,21 +835,31 @@ class TodoWindow(QWidget):
                 continue
 
             task_id = item.data(TASK_ID_ROLE)
-            date_key = item.data(TASK_DATE_ROLE)
+            date_key = current_group_date or item.data(TASK_DATE_ROLE)
             if not task_id or not date_key:
                 continue
 
             new_orders[str(task_id)] = counters[str(date_key)]
+            new_dates[str(task_id)] = str(date_key)
             counters[str(date_key)] += 1
 
         changed = False
         for i, task in enumerate(self.tasks):
-            if task.id in new_orders and task.order != new_orders[task.id]:
-                self.tasks[i] = replace(task, order=new_orders[task.id])
+            if task.id not in new_orders:
+                continue
+
+            next_order = new_orders[task.id]
+            next_date = new_dates.get(task.id, task.task_date)
+            if task.order != next_order or task.task_date != next_date:
+                self.tasks[i] = replace(task, order=next_order, task_date=next_date)
                 changed = True
 
         if changed:
             self._save_tasks_and_refresh()
+
+    def _show_task_stats(self) -> None:
+        dialog = TaskStatsDialog(self, self.tasks)
+        dialog.exec()
 
     def _save_tasks_and_refresh(self) -> None:
         self.task_store.save(self.tasks)
