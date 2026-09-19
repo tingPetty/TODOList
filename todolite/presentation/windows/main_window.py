@@ -4,7 +4,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QMessageBox, QStackedWidget, QToolButton, QVBoxLayout, QWidget
 
-from ...app.window_controller import WindowController
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...app.window_controller import WindowController
 from ..dialogs.statistics_dialog import StatisticsDialog
 from ..pages.focus_page import FocusPage
 from ..pages.todo_page import TodoPage
@@ -13,6 +16,7 @@ from ..widgets.surface_card import SurfaceCard
 from ..widgets.tab_bar import TabBar
 from ..widgets.title_bar import DraggableHeader
 from ..widgets.resize_grip import ResizeGrip
+from ..widgets.sprout import Sprout
 from ..styles.icons import app_icon
 from ..styles.metrics import WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH
 
@@ -22,7 +26,7 @@ class MainWindow(QWidget):
         super().__init__(parent)
         self.controller = controller
         self.setObjectName("TodoWindow")
-        self.setWindowTitle("Desktop Todo Lite")
+        self.setWindowTitle("小芽日记")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowIcon(app_icon())
@@ -38,15 +42,16 @@ class MainWindow(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         shell = SurfaceCard()
+        shell.setObjectName("WindowShell")
         shell.body.setContentsMargins(12, 8, 12, 8)
-        shell.body.setSpacing(4)
+        shell.body.setSpacing(8)
         root.addWidget(shell)
 
         header = DraggableHeader(self)
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(2, 0, 2, 0)
         header_layout.setSpacing(6)
-        title = QLabel("✓ Day Todo")
+        title = QLabel("小芽日记")
         title.setObjectName("AppTitle")
         title.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.menu_button = IconButton("⋯", "更多设置", "更多设置")
@@ -54,6 +59,7 @@ class MainWindow(QWidget):
         self.menu_button.setPopupMode(QToolButton.InstantPopup)
         self.close_button = IconButton("×", "退出软件", "退出软件", dangerous=True)
         self.close_button.clicked.connect(self.close)
+        header_layout.addWidget(Sprout(32))
         header_layout.addWidget(title, 1)
         header_layout.addWidget(self.menu_button)
         header_layout.addWidget(self.close_button)

@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from ..presentation.styles.icons import app_icon
-from ..presentation.styles.theme import WINDOW_CSS
+from ..presentation.styles.theme import apply_theme
 from ..presentation.windows.main_window import MainWindow
 from ..infrastructure.windows_identity import set_app_user_model_id
 from .window_controller import WindowController
@@ -18,8 +18,9 @@ def run() -> int:
     set_app_user_model_id()
     app = QApplication(sys.argv)
     app.setApplicationName("DesktopTodoLite")
+    app.setApplicationDisplayName("小芽日记")
     app.setWindowIcon(app_icon())
-    app.setStyleSheet(WINDOW_CSS)
+    apply_theme(app)
 
     window = MainWindow(WindowController())
     window.show()

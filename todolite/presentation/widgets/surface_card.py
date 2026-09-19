@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QFrame, QVBoxLayout
 
 
 class SurfaceCard(QFrame):
-    """Shared translucent card container for both top-level pages."""
+    """Opaque paper surface shared by pages and utility dialogs."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)

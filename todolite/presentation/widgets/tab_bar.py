@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QToolButton, QWidget
+from PySide6.QtCore import Signal, Qt
+from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QSizePolicy, QToolButton, QWidget
 
 from ..styles.metrics import TAB_HEIGHT
+from ..styles.icons import ui_icon
 
 
 class TabBar(QWidget):
@@ -11,19 +12,25 @@ class TabBar(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("TabBar")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(TAB_HEIGHT)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(4, 3, 4, 3)
         layout.setSpacing(4)
 
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
         self.buttons: list[QToolButton] = []
-        for index, title in enumerate(("✓  Todo", "◷  专注")):
+        for index, title in enumerate(("Todo", "专注")):
             button = QToolButton()
             button.setObjectName("TabButton")
             button.setText(title)
             button.setCheckable(True)
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            button.setFocusPolicy(Qt.StrongFocus)
+            button.setCursor(Qt.PointingHandCursor)
             button.setToolTip(f"切换到{title.split()[-1]}页面")
             button.setAccessibleName(f"{title.split()[-1]}页面")
             button.clicked.connect(lambda _checked=False, i=index: self._select(i))
@@ -40,6 +47,8 @@ class TabBar(QWidget):
     def setCurrentIndex(self, index: int) -> None:
         if 0 <= index < len(self.buttons):
             self.buttons[index].setChecked(True)
+            for i, button in enumerate(self.buttons):
+                button.setIcon(ui_icon("check" if i == 0 else "clock", light=i == index))
 
     def currentIndex(self) -> int:
         button = self.group.checkedId()

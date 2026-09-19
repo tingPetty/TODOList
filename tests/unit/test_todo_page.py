@@ -81,7 +81,7 @@ class TodoPageEditTests(unittest.TestCase):
             item = page.task_list.item(1)
             row = page.task_list.itemWidget(item)
             self.assertEqual(item.data(todo_page_module.TASK_DATE_ROLE), "2026-09-09")
-            self.assertEqual(row.text_label.text(), "❗ 新内容")
+            self.assertEqual(row.text_label.text(), "新内容")
             self.assertTrue(row.important)
 
             page.close()

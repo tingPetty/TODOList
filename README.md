@@ -1,15 +1,16 @@
-# Desktop Todo Lite
+# 小芽日记
 
 A lightweight Windows desktop Todo and focus widget built with PySide6.
 
 ## Features
 
-- Semi-transparent floating window
+- Opaque cream-and-green floating window with the Little Sprout theme
+- Shared SVG controls, a small sprout companion, and consistent light utility dialogs
 - Compact default window layout with a draggable bottom-right resize handle
 - Two top-level pages switched by the `Todo` and `专注` tabs
 - Add tasks by pressing Enter
 - Add tasks with selectable date (default today)
-- Mark tasks as important (bold + exclamation marker)
+- Mark tasks as important (bold + star marker)
 - Check task to strike through (only checkbox click toggles completion)
 - Delete task manually
 - Double-click task text to edit text/date/important in one dialog
@@ -61,3 +62,19 @@ This produces `DesktopTodoLite.exe` in the project root. The spec uses the inter
 - Focus rule: completed focus records older than the latest seven Beijing calendar dates are removed on startup and after a new session finishes.
 - The default window size is `430x420`, the minimum size is `360x360`, and dragging the lower-right grip resizes both dimensions.
 - The code is organized into `domain`, `services`, `infrastructure`, and `presentation` layers; Todo and Focus use shared presentation components.
+
+## Little Sprout redesign
+
+The task composer uses two rows, keeping the task text separate from the date and importance controls. Focus has labeled actions and a sprout that changes expression for running, paused, and saved states. Task statistics, focus history, task editing, calendars, and menus use the same paper-and-green palette.
+
+Focus plants grow with accumulated active time: a sprout below 20 minutes, a bud from 20 minutes, and a flower from 40 minutes. Pausing keeps the current growth stage with a resting expression; paused time does not contribute to growth. Each new session starts with a sprout. The executable filename and storage identifiers remain unchanged for startup/data compatibility.
+
+See [design proposal](docs/GREEN_CARTOON_REDESIGN.md) and [implementation and verification](docs/GREEN_CARTOON_IMPLEMENTATION.md) for screenshots and scope.
+
+Run the regression suite in an environment with the requirements installed:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+UI regressions use temporary repositories and Qt offscreen rendering. To regenerate sample screenshots, set `TODO_SCREENSHOTS` to an output directory before running the tests. On Windows, the offscreen tests explicitly load installed Microsoft YaHei and Consolas fonts when Qt cannot discover system fonts. No fonts are redistributed.

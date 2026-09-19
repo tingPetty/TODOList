@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QDate, Qt
-from PySide6.QtWidgets import QCheckBox, QDateEdit, QDialog, QHBoxLayout, QLabel, QLineEdit, QListWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtCore import QDate, QTimer, Qt
+from PySide6.QtWidgets import QDateEdit, QDialog, QHBoxLayout, QLabel, QLineEdit, QListWidgetItem, QToolButton, QVBoxLayout, QWidget
+from ..styles.icons import ui_icon
+from ..styles.controls import style_date_picker
 
 from ...services.task_service import TaskService
 from ..dialogs.task_edit_dialog import TaskEditDialog
@@ -34,6 +36,9 @@ class TodoPage(QWidget):
         self.on_show_stats = on_show_stats
         self.setObjectName("TodoPage")
         self._build_ui()
+        self.feedback_timer = QTimer(self)
+        self.feedback_timer.setSingleShot(True)
+        self.feedback_timer.timeout.connect(lambda: self.page_title.setText("任务清单"))
         self.refresh()
 
     def _build_ui(self) -> None:
@@ -43,7 +48,8 @@ class TodoPage(QWidget):
 
         card = SurfaceCard()
         header = QHBoxLayout()
-        title = QLabel("✓ 任务清单")
+        title = QLabel("任务清单")
+        self.page_title = title
         title.setObjectName("PageTitle")
         stats_button = IconButton("▥", "任务统计", "任务统计")
         stats_button.clicked.connect(self.on_show_stats)
@@ -51,46 +57,68 @@ class TodoPage(QWidget):
         header.addWidget(stats_button)
 
         self.input_box = QLineEdit()
-        self.input_box.setPlaceholderText("输入任务，按回车添加")
+        self.input_box.setPlaceholderText("写下一件小事，回车添加…")
+        self.input_box.setMinimumWidth(0)
         self.input_box.returnPressed.connect(self._add_task)
 
         self.date_picker = QDateEdit()
         self.date_picker.setDisplayFormat("yyyy-MM-dd")
         self.date_picker.setCalendarPopup(True)
-        self.date_picker.setDate(QDate.currentDate())
-        self.date_picker.setFixedWidth(116)
+        style_date_picker(self.date_picker)
+        self.date_picker.setDate(QDate.fromString(self.task_service.clock.today().isoformat(), "yyyy-MM-dd"))
+        self.date_picker.setFixedWidth(140)
+        self.date_picker.setAccessibleName("任务日期")
 
-        self.important_switch = QCheckBox("❗ 重要")
+        self.important_switch = QToolButton()
+        self.important_switch.setObjectName("ImportantButton")
+        self.important_switch.setText("重要")
+        self.important_switch.setIcon(ui_icon("star"))
+        self.important_switch.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.important_switch.setCheckable(True)
+        self.important_switch.setFocusPolicy(Qt.StrongFocus)
+        self.important_switch.setToolTip("标记为重要任务")
+        self.important_switch.setAccessibleName("重要任务")
+        self.important_switch.setFixedHeight(36)
+        self.add_button = IconButton("+", "添加任务", primary=True)
+        self.add_button.setFixedSize(36, 36)
+        self.add_button.clicked.connect(self._add_task)
         input_row = QHBoxLayout()
         input_row.setSpacing(7)
         input_row.addWidget(self.input_box, 1)
-        input_row.addWidget(self.date_picker)
-        input_row.addWidget(self.important_switch)
+        input_row.addWidget(self.add_button)
+        options_row = QHBoxLayout()
+        options_row.setSpacing(8)
+        options_row.addWidget(self.date_picker)
+        options_row.addWidget(self.important_switch)
+        options_row.addStretch()
+        self.error_label = QLabel("先写下一件小事吧")
+        self.error_label.setObjectName("ErrorText")
+        self.error_label.hide()
+        self.input_box.textEdited.connect(lambda: self.error_label.hide())
 
         self.task_list = TaskListWidget()
         self.task_list.setObjectName("TaskList")
+        self.task_list.setMinimumSize(0, 0)
+        self.task_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.task_list.reordered.connect(self._on_tasks_reordered)
 
         card.body.addLayout(header)
         card.body.addLayout(input_row)
+        card.body.addLayout(options_row)
+        card.body.addWidget(self.error_label)
         card.body.addWidget(self.task_list, 1)
+        self._empty_state = EmptyState("这里还没有待办\n从一件小事开始吧")
+        card.body.addWidget(self._empty_state, 1)
         root.addWidget(card, 1)
 
     def refresh(self) -> None:
+        scroll = self.task_list.verticalScrollBar().value()
         self.task_list.clear()
         groups = self.task_service.display_groups()
+        self._empty_state.setVisible(not groups)
+        self.task_list.setVisible(bool(groups))
         if not groups:
-            self.task_list.setVisible(False)
-            empty = EmptyState("今天还没有任务\n先安排一件小事吧")
-            self.task_list.parentWidget().layout().addWidget(empty)
-            self._empty_state = empty
             return
-
-        self.task_list.setVisible(True)
-        old_empty = getattr(self, "_empty_state", None)
-        if old_empty is not None:
-            old_empty.deleteLater()
-            self._empty_state = None
 
         for group in groups:
             date_key = group.date_key
@@ -127,9 +155,10 @@ class TodoPage(QWidget):
                     self._delete_task,
                     self._edit_task,
                 )
-                item.setSizeHint(row.sizeHint())
+                item.setSizeHint(row.sizeHint().expandedTo(row.minimumSize()))
                 self.task_list.addItem(item)
                 self.task_list.setItemWidget(item, row)
+        self.task_list.verticalScrollBar().setValue(scroll)
 
     def _toggle_completed_group(self, date_key: str) -> None:
         self.task_service.toggle_completed_group(date_key)
@@ -143,7 +172,10 @@ class TodoPage(QWidget):
                 self.important_switch.isChecked(),
             )
         except ValueError:
+            self.error_label.show()
+            self.input_box.setFocus()
             return
+        self.error_label.hide()
         self.input_box.clear()
         self.important_switch.setChecked(False)
         self.refresh()
@@ -151,6 +183,9 @@ class TodoPage(QWidget):
     def _toggle_task(self, task_id: str, completed: bool) -> None:
         self.task_service.toggle_task(task_id, completed)
         self.refresh()
+        if completed:
+            self.page_title.setText("又完成一件小事")
+            self.feedback_timer.start(1800)
 
     def _delete_task(self, task_id: str) -> None:
         self.task_service.delete_task(task_id)

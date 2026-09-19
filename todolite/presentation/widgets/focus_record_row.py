@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ...domain.focus import FocusSession
 from ..formatters import format_duration
 from .icon_button import IconButton
+from .elided_label import ElidedLabel
 
 
 class FocusRecordRow(QWidget):
@@ -17,16 +18,23 @@ class FocusRecordRow(QWidget):
         parent=None,
     ) -> None:
         super().__init__(parent)
+        self.setMinimumHeight(64)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 5, 6, 5)
         layout.setSpacing(8)
 
-        text = QLabel(f"{session.name}\n{session.ended_at[:16].replace('T', ' ')}")
+        text = ElidedLabel(session.name)
         text.setObjectName("TaskText")
-        text.setWordWrap(True)
+        text.setToolTip(session.name)
+        timestamp = QLabel(session.ended_at[:16].replace('T', ' '))
+        timestamp.setObjectName("MutedText")
+        info = QVBoxLayout()
+        info.setSpacing(3)
+        info.addWidget(text)
+        info.addWidget(timestamp)
 
         duration = QLabel(format_duration(session.duration_seconds))
-        duration.setObjectName("FocusName")
+        duration.setObjectName("RecordDuration")
         duration.setToolTip("专注时长")
 
         delete_button = IconButton(
@@ -34,6 +42,6 @@ class FocusRecordRow(QWidget):
         )
         delete_button.clicked.connect(lambda: on_delete(session.id))
 
-        layout.addWidget(text, 1)
+        layout.addLayout(info, 1)
         layout.addWidget(duration, 0)
         layout.addWidget(delete_button, 0)

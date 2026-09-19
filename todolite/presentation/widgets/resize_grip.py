@@ -44,12 +44,11 @@ class ResizeGrip(QSizeGrip):
     def paintEvent(self, event):  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor(226, 232, 240, 150), 1.4))
-        for offset in (7, 12, 17):
+        painter.setPen(QPen(QColor("#607A50"), 1.4))
+        for offset in (7, 12):
             painter.drawLine(
                 self.width() - offset,
                 self.height() - 2,
                 self.width() - 2,
                 self.height() - offset,
             )
-        super().paintEvent(event)
